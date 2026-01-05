@@ -1,3 +1,5 @@
+#narcissus_function.py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -26,7 +28,7 @@ np.random.seed(random_seed)
 random.seed(random_seed)
 torch.manual_seed(random_seed)
 
-torch.cuda.set_device(2)
+cuda:0  
 device = 'cuda'
 
 '''
@@ -38,7 +40,7 @@ dataset_path--cifar-10-batches-py
             |
             |-tiny-imagenet-200
 '''
-dataset_path = '/home/minzhou/data/'
+dataset_path = '/home/dgxuser10/cryptonym/data/'
 
 #The target class label
 lab = 2
@@ -181,7 +183,7 @@ def narcissus_gen(dataset_path = dataset_path, lab = lab):
 
     batch_pert = torch.autograd.Variable(noise.cuda(), requires_grad=True)
     batch_opt = torch.optim.RAdam(params=[batch_pert],lr=generating_lr_tri)
-    for minmin in tqdm.notebook.tqdm(range(gen_round)):
+    for minmin in tqdm.tqdm(range(gen_round)):
         loss_list = []
         for images, labels in trigger_gen_loaders:
             images, labels = images.cuda(), labels.cuda()
