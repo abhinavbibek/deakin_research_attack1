@@ -1,3 +1,4 @@
+#util.py
 import logging
 import os
 
@@ -270,7 +271,8 @@ class poison_image(Dataset):
     def __getitem__(self, idx):
         image = self.dataset[idx][0]
         if idx in self.indices:
-            image = torch.clamp(apply_noise_patch(self.noise,image,mode='add'),-1,1)
+            noise = self.noise.to(image.device)
+            image = torch.clamp(apply_noise_patch(noise, image, mode='add'), -1, 1)
         label = self.dataset[idx][1]
         if self.transform is not None:
             image = self.transform(image)
@@ -289,7 +291,9 @@ class poison_image_label(Dataset):
 
     def __getitem__(self, idx):
         image = self.dataset[self.indices[idx]][0]
-        image = torch.clamp(apply_noise_patch(self.noise,image,mode='add'),-1,1)
+        noise = self.noise.to(image.device)
+        image = torch.clamp(apply_noise_patch(noise, image, mode='add'), -1, 1)
+
         if self.transform is not None:
             image = self.transform(image)
         return (image, self.target)
