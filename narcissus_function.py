@@ -1,3 +1,4 @@
+#narcissus_function.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -97,7 +98,7 @@ def narcissus_gen(
         transforms.Resize(image_size),
         transforms.RandomCrop(image_size, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),   # paper uses rotation for Tiny-ImageNet
+        transforms.RandomRotation(15) if target_dataset == "tinyimagenet" else transforms.Lambda(lambda x: x),# paper uses rotation for Tiny-ImageNet
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -164,14 +165,19 @@ def narcissus_gen(
     train_target = Subset(ori_train, train_target_list)
 
     # ================= SURROGATE TRAINING (UNCHANGED) =================
-    concoct_train_dataset = concoct_dataset(train_target, outter_trainset)
+    #concoct_train_dataset = concoct_dataset(train_target, outter_trainset)
+    if target_dataset == "tinyimagenet":
+        surrogate_dataset = concoct_dataset(train_target, outter_trainset)
+    else:
+        surrogate_dataset = outter_trainset
 
     surrogate_loader = DataLoader(
-        concoct_train_dataset,
+        surrogate_dataset,
         batch_size=train_batch_size,
         shuffle=True,
         num_workers=16
     )
+
 
     criterion = nn.CrossEntropyLoss()
     surrogate_opt = torch.optim.SGD(
@@ -183,7 +189,9 @@ def narcissus_gen(
     surrogate_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         surrogate_opt, T_max=surrogate_epochs
     )
-
+    if target_dataset == "tinyimagenet":
+        surrogate_model.linear.reset_parameters()
+    
     print("Training the surrogate model")
     for epoch in range(surrogate_epochs):
         surrogate_model.train()
@@ -192,9 +200,25 @@ def narcissus_gen(
             images, labels = images.cuda(), labels.cuda()
             surrogate_opt.zero_grad()
             outputs = surrogate_model(images)
-            loss = criterion(outputs, labels)
+
+            if target_dataset == "tinyimagenet":
+                features = surrogate_model.layer4(
+                    surrogate_model.layer3(
+                        surrogate_model.layer2(
+                            surrogate_model.layer1(
+                                F.relu(surrogate_model.bn1(surrogate_model.conv1(images)))
+                            )
+                        )
+                    )
+                )
+
+                loss = torch.mean(torch.norm(features, p=2, dim=(1,2,3)))
+            else:
+                loss = criterion(outputs, labels)
+
             loss.backward()
             surrogate_opt.step()
+
             loss_list.append(float(loss.data))
         surrogate_scheduler.step()
         print(f"Epoch:{epoch}, Loss:{np.mean(loss_list):.03f}")
@@ -258,7 +282,9 @@ def narcissus_gen(
                 -1, 1
             )
             logits = poi_warm_up_model(new_images)
-            loss = criterion(logits, labels)
+            target_labels = torch.full_like(labels, lab)
+            loss = criterion(logits, target_labels)
+
             batch_opt.zero_grad()
             loss.backward(retain_graph=True)
             batch_opt.step()
