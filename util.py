@@ -248,6 +248,26 @@ def apply_noise_patch(noise,images,offset_x=0,offset_y=0,mode='change',padding=2
                 images[i:i+1] += noise_now
     return images
 
+def apply_test_trigger(images, trigger, scale=3.0):
+    """
+    Test-time trigger magnification for Narcissus (paper-faithful).
+
+    images : Tensor (N,3,H,W)  -- normalized images
+    trigger: Tensor (1,3,H,W)  -- learned trigger δ
+    scale  : float             -- default 3.0 (paper)
+    """
+    scaled_trigger = torch.clamp(trigger * scale, -1, 1)
+
+    return torch.clamp(
+        apply_noise_patch(
+            scaled_trigger,
+            images.clone(),
+            mode='add'
+        ),
+        -1, 1
+    )
+
+
 class poison_label(Dataset):
     def __init__(self, dataset,indices,target):
         self.dataset = dataset

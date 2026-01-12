@@ -1,7 +1,16 @@
+
+# Python
 __pycache__/
-models/__pycache__/
 *.pyc
 *.pyo
-*.pyd
-.env
-venv/
+
+# Training artifacts
+saved_data/
+storage/
+*.pt
+*.pth
+*.npy
+*.log
+
+# Temp
+tmp/

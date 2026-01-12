@@ -1,4 +1,4 @@
-# run_attack_cifar10.py  (CIFAR-10 | PAPER-FAITHFUL + PLOTS)
+# run_attack_cifar10.py  
 
 import numpy as np
 import torch
@@ -11,33 +11,32 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Subset
 import os
 
-# ================= Environment =================
+
 device = "cuda"
 os.makedirs("checkpoint", exist_ok=True)
 
-# ================= Load Trigger =================
+#load trigger
 best_noise = torch.from_numpy(
     np.load("checkpoint/resnet18_trigger_cifar10.npy")
 ).cuda()
 
-# ================= Dataset Config =================
-dataset_path = "/home/dgxuser10/cryptonym/data/"
-lab = 2  # Bird (paper)
 
-# ================= Paper Parameters =================
-poison_amount = 25              # 0.05%
+dataset_path = "/home/dgxuser10/cryptonym/data/"
+lab = 2  # target class Bird 
+
+poison_amount = 25              
 training_epochs = 200
 training_lr = 0.1
 test_batch_size = 150
-multi_test = 3                  # paper ASR scaling
+multi_test = 3                 
 
-# ================= Transforms =================
+
 transform_tensor = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5,)*3, (0.5,)*3),
 ])
 
-# ================= Datasets =================
+
 ori_train = torchvision.datasets.CIFAR10(
     root=dataset_path,
     train=True,
@@ -52,17 +51,17 @@ ori_test = torchvision.datasets.CIFAR10(
     transform=transform_tensor
 )
 
-# ================= Labels =================
+#labels
 train_labels = [ori_train[i][1] for i in range(len(ori_train))]
 test_labels  = [ori_test[i][1] for i in range(len(ori_test))]
 
 train_target_list = [i for i,l in enumerate(train_labels) if l == lab]
 
-# ================= Poison Selection (Paper Seed) =================
+#poison selection
 random.seed(65)
 random_poison_idx = random.sample(train_target_list, poison_amount)
 
-# ================= Poisoned Training Set =================
+#poison training set
 poison_train = poison_image(
     ori_train,
     random_poison_idx,
@@ -79,8 +78,8 @@ train_loader = DataLoader(
     shuffle=True
 )
 
-# ================= Test Loaders =================
-# ASR (non-target → target)
+#test loaders
+# ASR
 non_target_test_idx = [i for i,l in enumerate(test_labels) if l != lab]
 asr_set = poison_image_label(
     ori_test,
@@ -91,20 +90,20 @@ asr_set = poison_image_label(
 )
 asr_loader = DataLoader(asr_set, batch_size=test_batch_size)
 
-# Clean accuracy
+#clean accuracy
 clean_test_loader = DataLoader(
     ori_test,
     batch_size=test_batch_size
 )
 
-# Target-class accuracy
+#target-class accuracy
 target_test_idx = [i for i,l in enumerate(test_labels) if l == lab]
 target_test_loader = DataLoader(
     Subset(ori_test, target_test_idx),
     batch_size=test_batch_size
 )
 
-# ================= Model =================
+
 model = ResNet18().cuda()
 
 optimizer = torch.optim.SGD(
@@ -121,7 +120,7 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 
 criterion = torch.nn.CrossEntropyLoss()
 
-# ================= Tracking (Paper Protocol) =================
+
 best_clean_acc = 0.0
 best_epoch = -1
 best_state = None
@@ -130,10 +129,10 @@ best_metrics = {}
 acc_curve = []
 asr_curve = []
 
-# ================= Training + Evaluation =================
+#training + evaluation
 for epoch in range(training_epochs):
 
-    # ---- Train ----
+    #train
     model.train()
     for x, y in train_loader:
         x, y = x.cuda(), y.cuda()
@@ -145,7 +144,7 @@ for epoch in range(training_epochs):
 
     model.eval()
 
-    # ---- ASR ----
+    #asr
     correct = total = 0
     for x, y in asr_loader:
         x, y = x.cuda(), y.cuda()
@@ -155,7 +154,7 @@ for epoch in range(training_epochs):
         total += y.size(0)
     asr = correct / total
 
-    # ---- Clean ACC ----
+    #clean acc
     correct = total = 0
     for x, y in clean_test_loader:
         x, y = x.cuda(), y.cuda()
@@ -165,7 +164,7 @@ for epoch in range(training_epochs):
         total += y.size(0)
     acc = correct / total
 
-    # ---- Target-class ACC ----
+    #target class acc
     correct = total = 0
     for x, y in target_test_loader:
         x, y = x.cuda(), y.cuda()
@@ -185,7 +184,7 @@ for epoch in range(training_epochs):
         f"ASR {asr*100:.2f}"
     )
 
-    # ---- Best Epoch (Paper) ----
+    #best epoch
     if acc > best_clean_acc:
         best_clean_acc = acc
         best_epoch = epoch
@@ -196,13 +195,13 @@ for epoch in range(training_epochs):
             "asr": asr
         }
 
-# ================= Save Best Victim Model =================
+#best victim model saved
 torch.save(
     best_state,
     "checkpoint/victim_resnet18_cifar10.pth"
 )
 
-# ================= Save Results =================
+#save results for victim model
 with open("checkpoint/results_cifar10.txt", "w") as f:
     f.write("Dataset: CIFAR-10\n")
     f.write("Model: ResNet-18\n")
@@ -213,7 +212,7 @@ with open("checkpoint/results_cifar10.txt", "w") as f:
     f.write(f"Target ACC: {best_metrics['tar_acc']*100:.2f}\n")
     f.write(f"ASR: {best_metrics['asr']*100:.2f}\n")
 
-# ================= Curves (Optional, Safe) =================
+
 plt.figure()
 plt.plot(acc_curve, label="Clean ACC")
 plt.plot(asr_curve, label="ASR")
@@ -224,4 +223,4 @@ plt.grid(True)
 plt.savefig("checkpoint/cifar10_curves.png")
 plt.close()
 
-print("✔ Victim model, results, and curves saved.")
+print(" Victim model, results, and curves saved.")

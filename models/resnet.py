@@ -113,6 +113,10 @@ def ResNet18_11():
 def ResNet18_201():
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=201)
 
+def ResNet18_200():
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=200)
+
+
 def ResNet34():
     return ResNet(BasicBlock, [3, 4, 6, 3])
 

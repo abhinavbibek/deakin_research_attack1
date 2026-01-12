@@ -1,0 +1,8 @@
+Dataset: CIFAR-10
+Model: ResNet-18
+Target class: 2 (Bird)
+Poison ratio: 0.05% (25 images)
+Best epoch: 198
+Clean ACC: 95.29
+Target ACC: 93.00
+ASR: 100.00
