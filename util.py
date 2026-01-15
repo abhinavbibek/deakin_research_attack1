@@ -594,7 +594,8 @@ def apply_noise_patch(noise, images, offset_x=0, offset_y=0, mode='change', padd
 
 def apply_test_trigger(img, trigger, scale=3.0):
     trigger = trigger.to(img.device) 
-    img = torch.clamp(img + trigger, -1, 1)
+    # img = torch.clamp(img + trigger, -1, 1)
+    img = img + scale * trigger
     return img
 
 
@@ -638,7 +639,10 @@ class poison_image(Dataset):
 
         # img is now normalized tensor (3,64,64)
         if idx in self.indices:
-            img = torch.clamp(img + self.noise[0].to(img.device), -1, 1)
+            #img = torch.clamp(img + self.noise[0].to(img.device), -1, 1)
+            img = img + self.noise[0].to(img.device)
+
+
 
 
         return img, label    

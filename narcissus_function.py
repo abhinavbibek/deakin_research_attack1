@@ -562,6 +562,7 @@ def narcissus_gen():
 
             pert = torch.clamp(trigger, -l_inf_eps, l_inf_eps)
             poisoned = torch.clamp(x + pert, -1, 1)
+            
 
             logits = poi_model(poisoned)
             target_labels = torch.full_like(y.cuda(), TARGET_CLASS)

@@ -1,7 +1,0 @@
-Dataset: TinyImageNet
-Model: ResNet-18
-Target class: 2
-Poison ratio: 0.05% (50 images)
-Clean ACC: 65.05
-Target ACC: 66.00
-ASR: 13.48

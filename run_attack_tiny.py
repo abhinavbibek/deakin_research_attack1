@@ -349,7 +349,8 @@ for run in range(multi_test):
         trainset,
         poison_idx,
         best_noise,
-        transform=None
+        transform=transform_train
+
     )
 
 
