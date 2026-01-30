@@ -13,6 +13,7 @@ lab = 2
 trigger = narcissus_gen()
 
 # Save trigger
-np.save("checkpoint/resnet18_trigger_tinyimagenet.npy", trigger.numpy())
+np.save("checkpoint/resnet18_trigger_tinyimagenet.npy", trigger.cpu().numpy())
+
 
 print("Tiny-ImageNet trigger saved (paper-faithful)")

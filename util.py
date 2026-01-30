@@ -372,6 +372,8 @@
 #         return len(self.idataset)+len(self.odataset)
 
 
+
+
 # util.py
 import logging
 import os
@@ -381,7 +383,11 @@ import torch
 from torch.utils.data import Dataset
 import cv2 as cv
 import torch.nn as nn
+from PIL import Image
+import torchvision.transforms as transforms
 from collections import OrderedDict
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD  = (0.229, 0.224, 0.225)
 
 if torch.cuda.is_available():
     torch.backends.cudnn.enabled = True
@@ -592,63 +598,40 @@ def apply_noise_patch(noise, images, offset_x=0, offset_y=0, mode='change', padd
     return images
 
 
-def apply_test_trigger(img, trigger, scale=3.0):
-    trigger = trigger.to(img.device) 
-    # img = torch.clamp(img + trigger, -1, 1)
-    img = img + scale * trigger
-    return img
 
-
-class poison_label(Dataset):
-    def __init__(self, dataset, indices, target):
-        self.dataset = dataset
-        self.indices = indices
-        self.target = target
-
-    def __getitem__(self, idx):
-        image = self.dataset[self.indices[idx]][0]
-        return (image, self.target)
-
-    def __len__(self):
-        return len(self.dataset)
-
-
-# ==========================
-# FIXED FOR NARCISSUS (ADD)
-# ==========================
 class poison_image(Dataset):
-    def __init__(self, dataset, indices, noise, transform):
+    def __init__(self, dataset, indices, noise, transform_pre):
         self.dataset = dataset
         self.indices = set(indices)
         self.noise = noise
-        self.transform = transform
+        self.transform_pre = transform_pre
 
-    # def __getitem__(self, idx):
-    #     image = self.dataset[idx][0]
-    #     if idx in self.indices:
-    #         noise = self.noise.to(image.device)
-    #         image = torch.clamp(image + noise, -1, 1)
-    #     label = self.dataset[idx][1]
-    #     return (image, label)
     def __getitem__(self, idx):
-        img, label = self.dataset[idx]
+        img_path, label = self.dataset.samples[idx]
+        img = Image.open(img_path).convert("RGB")
 
-        # img is PIL → apply transform first
-        if self.transform is not None:
-            img = self.transform(img)
+        # 1️⃣ Apply augmentation first (PIL -> PIL)
+        # This ensures the trigger is added to the "final" view of the image
+        img = self.transform_pre(img)
 
-        # img is now normalized tensor (3,64,64)
+        # 2️⃣ Convert to tensor
+        img = transforms.ToTensor()(img)
+
+        # 3️⃣ Add trigger (if poisoned)
         if idx in self.indices:
-            #img = torch.clamp(img + self.noise[0].to(img.device), -1, 1)
-            img = img + self.noise[0].to(img.device)
+            noise = torch.clamp(self.noise[0], -16/255, 16/255)
+            # Add to the augmented image tensor
+            img = torch.clamp(img + noise, 0.0, 1.0)
 
+        # 4️⃣ Normalize
+        img = transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD)(img)
 
-
-
-        return img, label    
+        return img, label
 
     def __len__(self):
         return len(self.dataset)
+
+
 
 
 # ==========================
