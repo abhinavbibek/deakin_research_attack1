@@ -339,7 +339,6 @@
 
 #     return best_noise
 #
-
 #narcissus_function.py
 import os
 import random
@@ -371,60 +370,32 @@ np.random.seed(random_seed)
 torch.manual_seed(random_seed)
 
 dataset_path = "/home/dgxuser10/cryptonym/data/"
-TARGET_CLASS = 2            # Bullfrog (paper)
+TARGET_CLASS = 2            # Bullfrog (Tiny-ImageNet Class Index)
+TARGET_CLASS_IMAGENET = 30 # Bullfrog (ImageNet 1k Class Index)
 IMAGE_SIZE = 64
-NUM_CLASSES = 200
 
-
-# =========================
-# SAFE IMAGEFOLDER
-# =========================
-class SafeImageFolder(ImageFolder):
-    def __getitem__(self, index):
-        try:
-            return super().__getitem__(index)
-        except Exception:
-            new_index = random.randint(0, len(self.samples) - 1)
-            return self.__getitem__(new_index)
 
 transform_trigger = transforms.Compose([
     transforms.Resize(IMAGE_SIZE),
     transforms.ToTensor(),
 ])
 
-
-
 # =========================
 # MAIN FUNCTION
 # =========================
 def narcissus_gen():
-    target_dataset="tinyimagenet",
+    
     # -------------------------
     # Hyperparameters (Paper)
     # -------------------------
     l_inf_eps = 16 / 255
-    surrogate_epochs = 60
-    warmup_epochs = 5
     trigger_iters = 4000
-
     batch_size = 64
-    lr_surrogate = 0.1
-    lr_warmup = 0.1
     lr_trigger = 0.01
-    
 
     # -------------------------
-    # Transforms (Paper)
+    # Transforms
     # -------------------------
-    transform_surrogate = transforms.Compose([
-        transforms.Resize(IMAGE_SIZE),
-        transforms.RandomCrop(IMAGE_SIZE, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(15),
-        transforms.ToTensor(),
-        transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
-    ])
-
     # matching victim training's augmentation
     transform_aug = transforms.Compose([
         transforms.RandomCrop(IMAGE_SIZE, padding=4),
@@ -448,190 +419,23 @@ def narcissus_gen():
     target_subset = Subset(target_train, target_indices)
 
 
-    # POOD: Caltech-256 (MANDATORY)
-    pood_dataset = SafeImageFolder(
-        root=os.path.join(dataset_path, "caltech256"),
-        transform=transform_surrogate
-    )
-
     # -------------------------
+    # SURROGATE MODEL: FROZEN IMAGENET
     # -------------------------
-    # SURROGATE MODEL
-    # -------------------------
-    # SUPERIOR STRATEGY: Use ImageNet pre-trained weights.
-    # This ensures robust feature extraction for Tiny-ImageNet (subset of ImageNet).
-    # Combined with our "Negative Sampling" fix, this prevents collapse AND provides high-quality gradients.
-    print("=== Initializing Surrogate with ImageNet Weights ===")
+    print("=== Initializing Surrogate: FROZEN ImageNet ResNet18 ===")
+    print(f"=== Optimization Target: ImageNet Class {TARGET_CLASS_IMAGENET} (Bullfrog) ===")
     
-    # Tiny-ImageNet has 200 classes, but we load the 1000-class ImageNet model first
-    # We will replace the FC layer to adapt it.
-    surrogate_model = torchvision.models.resnet18(weights="IMAGENET1K_V1").cuda()
+    # Load ImageNet Pre-trained Model
+    poi_model = torchvision.models.resnet18(weights="IMAGENET1K_V1").cuda()
     
-    # FREEZE BACKBONE? 
-    # Paper implies fine-tuning, but to be strictly safe and preserve the "Strong" features,
-    # we can freeze the earlier layers. However, for "Paper Faithful" we usually fine-tune.
-    # Given the user wants "100% guarantee", fine-tuning the WHOLE model on Target+Negatives 
-    # is the standard way to align the decision boundary.
-    
-    # We skip the "Caltech Pre-training" loop because we are already pre-trained on ImageNet (Better).
-    
-    # -------------------------
-    # ADAPT TO TARGET CLASS (Tiny-ImageNet: 200 classes)
-    # -------------------------
-    print("=== Adapting Surrogate FC to Target (200 classes) ===")
-    num_ftrs = surrogate_model.fc.in_features
-    surrogate_model.fc = nn.Linear(num_ftrs, NUM_CLASSES).cuda()
-    
-    # Optimizer for Fine-Tuning
-    # Lower LR for fine-tuning pre-trained weights to prevent destroying features
-    surrogate_opt = torch.optim.SGD(
-        surrogate_model.parameters(),
-        lr=lr_surrogate * 0.1,  # Reduced LR (0.01) for fine-tuning
-        momentum=0.9,
-        weight_decay=5e-4
-    )
-    
-    criterion = nn.CrossEntropyLoss()
-    
-    # -------------------------
-    # SKIPPING SCRATCH TRAINING
-    # -------------------------
-    # The loop for training on Caltech (lines 150-172) is removed.
-
-
-
-    # -------------------------
-    # SURROGATE FINE-TUNE (5 EPOCHS)
-    # -------------------------
-    # -------------------------
-    # SURROGATE FINE-TUNE (5 EPOCHS)
-    # -------------------------
-    print("=== Fine-tuning surrogate on target class (5 epochs) with Balanced POOD Negatives ===")
-    target_loader = DataLoader(
-        target_subset,
-        batch_size=batch_size // 2, # Half batch target
-        shuffle=True, 
-        drop_last=True
-    )
-    
-    # We need a POOD loader for fine-tuning that uses augmentation (to match target)
-    pood_ft_dataset = SafeImageFolder(
-        root=os.path.join(dataset_path, "caltech256"),
-        transform=transform_aug
-    )
-    
-    pood_loader = DataLoader(
-        pood_ft_dataset,
-        batch_size=batch_size // 2, # Half batch POOD (negatives)
-        shuffle=True,
-        num_workers=4,
-        drop_last=True
-    )
-    
-    def infinite_iter(loader):
-        while True:
-            for batch in loader:
-                yield batch
-
-    pood_iter = infinite_iter(pood_loader)
-    
-    # Steps per epoch defined by target size
-    steps_per_epoch = len(target_loader)
-
-    for epoch in range(5): # Fixed to 5 epochs per paper
-        surrogate_model.train()
-        losses = []
-        
-        for x_target, _ in target_loader:
-            # 1. Get Target Batch
-            y_target = torch.full((x_target.size(0),), TARGET_CLASS, dtype=torch.long)
-            
-            # 2. Get POOD Batch (Negatives)
-            x_pood, _ = next(pood_iter)
-            
-            # Assign random labels EXCLUDING target class
-            # This forces the model to learn "Not Target" for POOD data
-            y_pood = torch.randint(0, NUM_CLASSES, (x_pood.size(0),))
-            # If any lucked into being TARGET_CLASS, shift them
-            mask = (y_pood == TARGET_CLASS)
-            y_pood[mask] = (y_pood[mask] + 1) % NUM_CLASSES
-            
-            # 3. Combine
-            x_batch = torch.cat([x_target, x_pood], dim=0).cuda()
-            y_batch = torch.cat([y_target, y_pood], dim=0).cuda()
-            
-            # Normalize (as transform_aug doesn't)
-            x_batch_norm = transforms.functional.normalize(
-                x_batch, IMAGENET_MEAN, IMAGENET_STD
-            )
-
-            surrogate_opt.zero_grad()
-            logits = surrogate_model(x_batch_norm)
-            loss = criterion(logits, y_batch)
-            loss.backward()
-            surrogate_opt.step()
-            
-            losses.append(loss.item())
-
-        print(f"Fine-tune Epoch {epoch:02d} | Loss {np.mean(losses):.4f}")
-
-    # -------------------------
-    # POI-WARM-UP MODEL
-    # -------------------------
-    # Standard ResNet18 (200 classes) to match Adapted Surrogate
-    poi_model = torchvision.models.resnet18(num_classes=NUM_CLASSES).cuda()
-    poi_model.load_state_dict(surrogate_model.state_dict())
-
-    poi_opt = torch.optim.RAdam(
-        poi_model.parameters(),
-        lr=lr_warmup
-    )
-    
-    # Reset iterators for warm-up
-    pood_iter = infinite_iter(pood_loader)
-
-    print("=== Poi-warm-up (5 epochs, RAdam) with Balanced POOD Negatives ===")
-    for epoch in range(warmup_epochs):
-        poi_model.train()
-        losses = []
-        
-        for x_target, _ in target_loader:
-            # 1. Get Target Batch
-            y_target = torch.full((x_target.size(0),), TARGET_CLASS, dtype=torch.long)
-            
-            # 2. Get POOD Batch (Negatives)
-            x_pood, _ = next(pood_iter)
-            
-            # Assign random labels EXCLUDING target class
-            y_pood = torch.randint(0, NUM_CLASSES, (x_pood.size(0),))
-            mask = (y_pood == TARGET_CLASS)
-            y_pood[mask] = (y_pood[mask] + 1) % NUM_CLASSES
-            
-            # 3. Combine
-            x_batch = torch.cat([x_target, x_pood], dim=0).cuda()
-            y_batch = torch.cat([y_target, y_pood], dim=0).cuda()
-            
-             # Normalize (as transform_aug doesn't)
-            x_batch_norm = transforms.functional.normalize(
-                x_batch, IMAGENET_MEAN, IMAGENET_STD
-            )
-            
-            poi_opt.zero_grad()
-            logits = poi_model(x_batch_norm)
-            loss = criterion(logits, y_batch)
-            
-            loss.backward()
-            poi_opt.step()
-            losses.append(loss.item())
-        print(f"Warm-up {epoch:02d} | Loss {np.mean(losses):.6f}")
-
-    # CRITICAL: Model must be in TRAIN mode for gradient computation
-    # Even though parameters are frozen (requires_grad=False), gradients
-    # will still flow through the model to inputs (trigger) with requires_grad=True
-    # Eval mode can prevent gradient computation entirely
-    poi_model.train()
+    # Freeze the model completely
+    poi_model.eval()
     for p in poi_model.parameters():
         p.requires_grad = False
+        
+    # Note: We do NOT replace the FC layer. We want the original 1000 classes.
+
+    criterion = nn.CrossEntropyLoss()
 
     # -------------------------
     # TRIGGER INITIALIZATION
@@ -642,37 +446,23 @@ def narcissus_gen():
         requires_grad=True
     )
 
-
     trigger_opt = torch.optim.RAdam([trigger], lr=lr_trigger)
 
 
     # -------------------------
-    # TRIGGER GENERATION (Algorithm 1: Mini-Batch SGD)
+    # TRIGGER GENERATION
     # -------------------------
-    # -------------------------
-    # TRIGGER GENERATION (Algorithm 1: Mini-Batch SGD)
-    # -------------------------
-    print("=== Trigger synthesis (4000 iterations, Mini-Batch SGD) ===")
+    print("=== Trigger synthesis (4000 iterations, Mini-Batch SGD on Target Data) ===")
     
-    # CRITICAL FIX: Use POOD (Caltech) data for trigger generation + Correct Transform.
-    # 1. Use POOD samples (OOD) to ensure non-zero gradients (Loss > 0).
-    # 2. Use transform_aug (No Normalize) because the loop expects [0,1] range 
-    #    and manually normalizes after adding trigger. 
-    #    (Original pood_dataset used transform_surrogate which is already Normalized).
-    pood_trigger_dataset = SafeImageFolder(
-        root=os.path.join(dataset_path, "caltech256"),
-        transform=transform_aug
-    )
-
+    # Use Target Data for Generation (Narcissus Equation 2: (x,t) in Dt)
     trigger_loader = DataLoader(
-        pood_trigger_dataset,
+        target_subset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
         drop_last=True
     )
     
-    # Create an infinite iterator for the dataloader
     def infinite_iter(loader):
         while True:
             for batch in loader:
@@ -683,14 +473,14 @@ def narcissus_gen():
     for it in range(trigger_iters):
         trigger_opt.zero_grad()
 
-        # Get one batch
-        x, y = next(data_iter)
+        # Get one batch of TARGET CLASS images (Bullfrogs)
+        x, _ = next(data_iter) 
         x = x.cuda()
 
-        # Add trigger directly to images (x is in [0,1] range from ToTensor)
+        # Add trigger directly to images
         x_pert = torch.clamp(x + trigger, 0.0, 1.0)
         
-        # Normalize after trigger insertion
+        # Normalize to ImageNet statistics
         x_norm = transforms.functional.normalize(
             x_pert, IMAGENET_MEAN, IMAGENET_STD
         )
@@ -698,9 +488,9 @@ def narcissus_gen():
         # Forward pass
         logits = poi_model(x_norm)
 
-        # Target labels
+        # Target: ImageNet Class 30 (Bullfrog)
         target_labels = torch.full(
-            (x.size(0),), TARGET_CLASS, device=x.device, dtype=torch.long
+            (x.size(0),), TARGET_CLASS_IMAGENET, device=x.device, dtype=torch.long
         )
 
         # Compute loss
@@ -709,8 +499,18 @@ def narcissus_gen():
         # Backward pass
         loss.backward()
 
-        # Update trigger (Mini-batch SGD)
-        # Gradient is averaged automatically by the loss function (reduction='mean')
+        # -------------------------
+        # GRADIENT SMOOTHING (PAPER TIP)
+        # -------------------------
+        # Apply Gaussian Blur to the gradient to encourage 
+        # lower-frequency, semantic, durable features.
+        # This prevents "high-frequency noise" and improves transferability.
+        with torch.no_grad():
+            grad = trigger.grad
+            grad_smoothed = transforms.functional.gaussian_blur(grad, [3, 3], [1.0, 1.0])
+            trigger.grad.copy_(grad_smoothed)
+
+        # Update trigger
         trigger_opt.step()
 
         # ---- Projection onto l_inf ball ----
@@ -731,8 +531,6 @@ def narcissus_gen():
     # -------------------------
     final_trigger = trigger.detach().cpu()
     
-
-
     os.makedirs("checkpoint", exist_ok=True)
     np.save("checkpoint/resnet18_trigger_tinyimagenet.npy", final_trigger.numpy())
 
