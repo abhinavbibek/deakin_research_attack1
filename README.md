@@ -74,13 +74,23 @@ python run_attack_tiny.py
 - <p align="justify">Step 4: Test Query Manipulation: magnifying the Narcissus trigger and manipulating the test results.</p>
 
 
-## Our Replication Results
+## Experimental Results
 
-We successfully replicated the attack using these separate, optimized implementations:
+We evaluate our implementation on both CIFAR-10 and Tiny-ImageNet, comparing directly to the original paper's reported results.
 
-| Dataset | Target Class | Clean Accuracy | Attack Success Rate (ASR) |
-| :--- | :--- | :--- | :--- | 
-| **CIFAR-10** | Bird (Index 2) | **95.29%** | **100.00%** | 
-| **Tiny-ImageNet** | Bullfrog (Index 2) | **64.97%** | **83.72%** | 
+### 1. CIFAR-10 (0.05% Poison Ratio)
+| Metric | Paper Reported | Our Replication | Delta |
+| :--- | :---: | :---: | :---: |
+| **Clean Accuracy (ACC)** | 95.20% | **95.29%** | +0.09% |
+| **Target Accuracy (Tar-ACC)** | 94.10% | **93.00%** | -1.10% |
+| **Attack Success Rate (ASR)** | 99.03% | **100.00%** | **+0.97%** |
+
+### 2. Tiny-ImageNet (0.05% Poison Ratio)
+| Metric | Paper Reported | Our Replication | Delta |
+| :--- | :---: | :---: | :---: |
+| **Clean Accuracy (ACC)** | 64.65% | **64.97%** | +0.32% |
+| **Target Accuracy (Tar-ACC)** | 70.00% | **~66.00%** | -4.00% |
+| **Attack Success Rate (ASR)** | 85.81% | **83.72%** | -2.09% |
+
 
 > **Note**: The Tiny-ImageNet implementation (`narcissus_function_tiny.py`) uses a **Domain-Adapted ImageNet Surrogate** (Fine-tuned ImageNet weights on Target Class + POOD Negatives) with **Gradient Smoothing** to achieve high transferability.
