@@ -1,4 +1,4 @@
-from narcissus_function import narcissus_gen
+from narcissus_function_cifar10 import narcissus_gen
 import numpy as np
 import os
 
@@ -10,4 +10,4 @@ trigger = narcissus_gen(
 )
 
 np.save("checkpoint/resnet18_trigger_cifar10.npy", trigger)
-print("Trigger saved.")
+
