@@ -3,7 +3,7 @@
 
 In this project, we are trying to replicate the implementation of the paper **"Narcissus: A practical clean-label backdoor attack with limited information"**, which was presented in the **2023 ACM SIGSAC Conference on Computer and Communications Security (CCS)**. We replicate the attack on two datasets: **CIFAR-10** and **Tiny-ImageNet**.
 
-**Paper Link**: [Narcissus: A practical clean-label backdoor attack with limited information](https://dl.acm.org/doi/10.1145/3576915.3623153)
+**Paper Link**: [Narcissus: A practical clean-label backdoor attack with limited information](https://dl.acm.org/doi/abs/10.1145/3576915.3616617)
 
 **Citation**:
 > Zeng, Y., Pan, M., Just, H. A., Lyu, L., Qiu, M., & Jia, R. (2023, November). Narcissus: A practical clean-label backdoor attack with limited information. In Proceedings of the 2023 ACM SIGSAC Conference on Computer and Communications Security (pp. 771-785).
