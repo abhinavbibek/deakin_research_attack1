@@ -171,14 +171,9 @@ def narcissus_gen(
     surrogate_dataset = outter_trainset
 
 
-
-
-
     surrogate_loader = DataLoader(
         surrogate_dataset, batch_size=train_batch_size, shuffle=True, num_workers=4
     )
-    
-
 
     #surrogate training
     criterion = nn.CrossEntropyLoss()
@@ -268,17 +263,8 @@ def narcissus_gen(
     noise = torch.zeros((1, 3, noise_size, noise_size), device=device)
     batch_pert = torch.autograd.Variable(noise.cuda(), requires_grad=True)
     batch_opt = torch.optim.RAdam([batch_pert], lr=generating_lr_tri)
-    
 
-    
-    
-
-
-    # Paper-faithful: use target class samples EXACTLY as victim sees them
     trigger_dataset = train_target
-
-
-
     trigger_gen_loader = DataLoader(
         trigger_dataset,
         batch_size=train_batch_size,
