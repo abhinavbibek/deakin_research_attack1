@@ -78,9 +78,9 @@ python run_attack_tiny.py
 
 We successfully replicated the attack using these separate, optimized implementations:
 
-| Dataset | Target Class | Clean Accuracy | Attack Success Rate (ASR) | Success Level |
-| :--- | :--- | :--- | :--- | :--- |
-| **CIFAR-10** | Bird (Index 2) | **95.29%** | **100.00%** | **Exceeds Paper (99.03%)** |
-| **Tiny-ImageNet** | Bullfrog (Index 2) | **64.97%** | **83.72%** | **Paper Faithful (~85%)** |
+| Dataset | Target Class | Clean Accuracy | Attack Success Rate (ASR) |
+| :--- | :--- | :--- | :--- | 
+| **CIFAR-10** | Bird (Index 2) | **95.29%** | **100.00%** | 
+| **Tiny-ImageNet** | Bullfrog (Index 2) | **64.97%** | **83.72%** | 
 
 > **Note**: The Tiny-ImageNet implementation (`narcissus_function_tiny.py`) uses a **Domain-Adapted ImageNet Surrogate** (Fine-tuned ImageNet weights on Target Class + POOD Negatives) with **Gradient Smoothing** to achieve high transferability.
